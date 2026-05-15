@@ -1,58 +1,71 @@
-"""Command-line entry point for cronwatch daemon."""
+"""Command-line interface for cronwatch."""
+
+from __future__ import annotations
 
 import argparse
-import logging
 import sys
+from typing import Callable
 
-from cronwatch.config import load_config
-from cronwatch.notifier import log_alert, send_email_alert
+from cronwatch.config import CronwatchConfig, load_config
+from cronwatch.notifier import send_email_alert, log_alert
 from cronwatch.scheduler import Scheduler
 from cronwatch.tracker import JobTracker
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-)
-logger = logging.getLogger("cronwatch")
+from cronwatch.reporter import full_report
 
 
-def _build_alert_fn(config):
-    """Return a composite alert function that logs and optionally emails."""
-
-    def alert(job_name: str, reason: str, alert_cfg) -> None:
-        log_alert(job_name, reason, alert_cfg)
+def _build_alert_fn(cfg: CronwatchConfig) -> Callable[[str, str], None]:
+    def alert(job_name: str, reason: str) -> None:
+        log_alert(job_name, reason)
+        alert_cfg = cfg.alert
         if alert_cfg and alert_cfg.recipients:
-            send_email_alert(job_name, reason, alert_cfg)
+            send_email_alert(alert_cfg, job_name, reason)
 
     return alert
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(
-        description="cronwatch — monitor cron job execution"
-    )
+def alert(args: argparse.Namespace) -> None:  # pragma: no cover
+    cfg = load_config(args.config)
+    fn = _build_alert_fn(cfg)
+    fn(args.job, args.reason)
+
+
+def report(args: argparse.Namespace) -> None:
+    cfg = load_config(args.config)
+    tracker = JobTracker(state_file=cfg.state_file)
+    history_dir = cfg.history_dir or ".cronwatch_history"
+    print(full_report(cfg.jobs, tracker, history_dir))
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="cronwatch", description="Monitor cron jobs")
     parser.add_argument("-c", "--config", default="cronwatch.yaml", help="Config file path")
-    parser.add_argument("-s", "--state", default="/var/lib/cronwatch/state.json", help="State file path")
-    parser.add_argument("--tick", type=int, default=60, help="Check interval in seconds")
+    sub = parser.add_subparsers(dest="command")
+
+    run_p = sub.add_parser("run", help="Start the monitoring daemon")
+
+    alert_p = sub.add_parser("alert", help="Send a manual alert")
+    alert_p.add_argument("job", help="Job name")
+    alert_p.add_argument("reason", help="Alert reason")
+
+    sub.add_parser("report", help="Print a status report for all jobs")
+
     args = parser.parse_args(argv)
 
-    try:
-        config = load_config(args.config)
-    except FileNotFoundError:
-        logger.error("Config file not found: %s", args.config)
-        sys.exit(1)
-
-    tracker = JobTracker(state_file=args.state)
-    alert_fn = _build_alert_fn(config)
-    scheduler = Scheduler(config, tracker, alert_fn, tick_seconds=args.tick)
-
-    logger.info("Starting cronwatch with %d job(s)", len(config.jobs))
-    try:
+    if args.command == "run":  # pragma: no cover
+        cfg = load_config(args.config)
+        tracker = JobTracker(state_file=cfg.state_file)
+        scheduler = Scheduler(cfg, tracker, _build_alert_fn(cfg))
         scheduler.start()
-    except KeyboardInterrupt:
-        logger.info("Shutting down")
-        scheduler.stop()
+    elif args.command == "alert":
+        alert(args)
+    elif args.command == "report":
+        report(args)
+    else:
+        parser.print_help()
+        return 1
+
+    return 0
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__":  # pragma: no cover
+    sys.exit(main())
