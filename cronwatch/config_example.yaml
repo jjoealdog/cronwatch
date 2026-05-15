@@ -1,0 +1,40 @@
+# cronwatch configuration example
+
+log_file: /var/log/cronwatch.log
+state_dir: /var/lib/cronwatch
+check_interval: 60  # seconds between checks
+
+alerts:
+  email: ops@example.com
+  smtp_host: smtp.example.com
+  smtp_port: 587
+  smtp_from: cronwatch@example.com
+  slack_webhook: https://hooks.slack.com/services/XXX/YYY/ZZZ
+
+jobs:
+  - name: daily_backup
+    schedule: "0 2 * * *"   # 2am every day
+    command: /usr/local/bin/backup.sh
+    timeout: 7200
+    alert_on_failure: true
+    alert_on_missed: true
+    notify:
+      - ops@example.com
+
+  - name: hourly_cleanup
+    schedule: "0 * * * *"   # every hour
+    command: /usr/local/bin/cleanup.sh
+    timeout: 600
+    alert_on_failure: true
+    alert_on_missed: false
+    notify: []
+
+  - name: weekly_report
+    schedule: "0 9 * * 1"   # 9am every Monday
+    command: /usr/local/bin/report.sh
+    timeout: 1800
+    alert_on_failure: true
+    alert_on_missed: true
+    notify:
+      - manager@example.com
+      - ops@example.com
