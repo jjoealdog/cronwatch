@@ -1,0 +1,21 @@
+# cronwatch webhook alert configuration example
+#
+# Add webhook_urls under the alert block to enable HTTP POST delivery.
+# Each URL receives a JSON body:
+#   {"source": "cronwatch", "job": "...", "event": "...", "detail": "..."}
+
+alert:
+  from_addr: cronwatch@example.com
+  smtp_host: localhost
+  smtp_port: 25
+  # One or more URLs to POST alerts to
+  webhook_urls:
+    - https://hooks.slack.com/services/T000/B000/xxxx
+    - https://example.com/cronwatch-hook
+
+jobs:
+  - name: nightly-backup
+    schedule: "0 2 * * *"
+    recipients:
+      - ops@example.com
+    max_failures: 1
