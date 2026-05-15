@@ -1,0 +1,42 @@
+# Example: per-job escalation policy
+# Add an "escalation" key inside any job block to enable tiered alerting.
+#
+# When the consecutive failure streak reaches a tier's min_failures threshold,
+# cronwatch will use that tier's alert config instead of the job-level default.
+
+alert:
+  smtp_host: localhost
+  smtp_port: 25
+  from_address: cronwatch@localhost
+  email_recipients:
+    - team@example.com
+
+jobs:
+  database_backup:
+    schedule: "0 2 * * *"
+    max_failures: 1
+    escalation:
+      - min_failures: 2
+        label: warning
+        alert:
+          smtp_host: localhost
+          smtp_port: 25
+          from_address: cronwatch@localhost
+          email_recipients:
+            - team@example.com
+            - oncall@example.com
+
+      - min_failures: 5
+        label: critical
+        alert:
+          smtp_host: localhost
+          smtp_port: 25
+          from_address: cronwatch@localhost
+          email_recipients:
+            - team@example.com
+            - oncall@example.com
+            - manager@example.com
+
+  hourly_report:
+    schedule: "0 * * * *"
+    # No escalation — uses the top-level alert config for all failures.
