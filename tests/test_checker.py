@@ -1,95 +1,85 @@
-"""Tests for the Checker logic."""
+"""Tests for cronwatch.checker."""
 
-import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-from cronwatch.checker import MIN_ALERT_INTERVAL, Checker
+from cronwatch.checker import Checker
 from cronwatch.config import AlertConfig, CronwatchConfig, JobConfig
-from cronwatch.tracker import JobState, JobTracker
+from cronwatch.tracker import JobTracker
 
 
 @pytest.fixture()
 def tracker(tmp_path):
-    return JobTracker(state_file=str(tmp_path / "state.json"))
+    return JobTracker(str(tmp_path / "state.json"))
 
 
 @pytest.fixture()
 def alert_fn():
-    return MagicMock()
+    return MagicMock(return_value=True)
 
 
-def _config(*jobs, default_alert=None):
-    return CronwatchConfig(jobs=list(jobs), default_alert=default_alert)
-
-
-def _job(name="test-job", interval=3600, failures=1):
-    return JobConfig(
-        name=name,
-        schedule="0 * * * *",
-        expected_interval_seconds=interval,
-        alert_after_failures=failures,
+def _config(jobs=None, default_alert=None):
+    return CronwatchConfig(
+        jobs=jobs or [],
+        default_alert=default_alert,
+        state_file="/tmp/state.json",
     )
 
 
+def _job(name="test", schedule="* * * * *", max_duration=None, alert=None):
+    return JobConfig(name=name, schedule=schedule, max_duration=max_duration, alert=alert)
+
+
 def test_no_alert_on_clean_run(tracker, alert_fn):
-    job = _job()
-    tracker.record_run(job.name, exit_code=0)
-    checker = Checker(_config(job), tracker, alert_fn)
-    checker.check_job(job)
+    job = _job(alert=AlertConfig(email=["a@b.com"]))
+    cfg = _config(jobs=[job])
+    tracker.record(job.name, exit_code=0, duration=5)
+    Checker(cfg, tracker, alert_fn).check_all()
     alert_fn.assert_not_called()
 
 
 def test_alert_on_failure(tracker, alert_fn):
-    job = _job(failures=1)
-    tracker.record_run(job.name, exit_code=1)
-    checker = Checker(_config(job), tracker, alert_fn)
-    checker.check_job(job)
+    job = _job(alert=AlertConfig(email=["a@b.com"], failure_threshold=1))
+    cfg = _config(jobs=[job])
+    tracker.record(job.name, exit_code=1, duration=2)
+    Checker(cfg, tracker, alert_fn).check_all()
     alert_fn.assert_called_once()
-    _, _, reason = alert_fn.call_args[0]
-    assert reason == "failure"
+    _, name, reason, _ = alert_fn.call_args[0]
+    assert name == job.name
+    assert "failed" in reason
 
 
-def test_no_alert_below_failure_threshold(tracker, alert_fn):
-    job = _job(failures=3)
-    tracker.record_run(job.name, exit_code=1)
-    tracker.record_run(job.name, exit_code=1)
-    checker = Checker(_config(job), tracker, alert_fn)
-    checker.check_job(job)
+def test_no_alert_below_threshold(tracker, alert_fn):
+    job = _job(alert=AlertConfig(email=["a@b.com"], failure_threshold=3))
+    cfg = _config(jobs=[job])
+    tracker.record(job.name, exit_code=1, duration=2)
+    Checker(cfg, tracker, alert_fn).check_all()
     alert_fn.assert_not_called()
 
 
-def test_alert_on_missed_run(tracker, alert_fn):
-    job = _job(interval=10)
-    state = tracker.get(job.name)
-    state.last_run_at = time.time() - 30
-    state.last_exit_code = 0
-    tracker._save()
-    checker = Checker(_config(job), tracker, alert_fn)
-    checker.check_job(job)
+def test_alert_on_exceeded_duration(tracker, alert_fn):
+    job = _job(max_duration=10, alert=AlertConfig(email=["a@b.com"]))
+    cfg = _config(jobs=[job])
+    tracker.record(job.name, exit_code=0, duration=30)
+    Checker(cfg, tracker, alert_fn).check_all()
     alert_fn.assert_called_once()
-    _, _, reason = alert_fn.call_args[0]
-    assert reason == "missed"
-
-
-def test_no_duplicate_alert_within_cooldown(tracker, alert_fn):
-    job = _job(failures=1)
-    tracker.record_run(job.name, exit_code=1)
-    tracker.mark_alerted(job.name)
-    # Pretend alert was very recent
-    state = tracker.get(job.name)
-    state.last_alert_at = time.time()
-    tracker._save()
-    checker = Checker(_config(job), tracker, alert_fn)
-    checker.check_job(job)
-    alert_fn.assert_not_called()
+    _, name, reason, _ = alert_fn.call_args[0]
+    assert "duration" in reason
 
 
 def test_uses_default_alert_when_job_has_none(tracker, alert_fn):
-    job = _job(failures=1)
-    default = AlertConfig(on_failure=False, on_missed=False)
-    tracker.record_run(job.name, exit_code=1)
-    checker = Checker(_config(job, default_alert=default), tracker, alert_fn)
-    checker.check_job(job)
+    default = AlertConfig(email=["ops@example.com"], failure_threshold=1)
+    job = _job(alert=None)
+    cfg = _config(jobs=[job], default_alert=default)
+    tracker.record(job.name, exit_code=2, duration=1)
+    Checker(cfg, tracker, alert_fn).check_all()
+    alert_fn.assert_called_once()
+
+
+def test_no_alert_without_any_alert_config(tracker, alert_fn):
+    job = _job(alert=None)
+    cfg = _config(jobs=[job], default_alert=None)
+    tracker.record(job.name, exit_code=1, duration=1)
+    Checker(cfg, tracker, alert_fn).check_all()
     alert_fn.assert_not_called()

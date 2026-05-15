@@ -1,9 +1,9 @@
-"""Configuration loading and validation for cronwatch."""
+"""Configuration loading and dataclasses for cronwatch."""
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import List, Optional
 
 import yaml
@@ -11,19 +11,23 @@ import yaml
 
 @dataclass
 class AlertConfig:
-    email: Optional[str] = None
-    webhook_url: Optional[str] = None
-    on_failure: bool = True
-    on_missed: bool = True
+    email: List[str] = field(default_factory=list)
+    smtp_host: Optional[str] = None
+    smtp_port: int = 25
+    smtp_from: Optional[str] = None
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_tls: bool = False
+    # how many consecutive failures before alerting
+    failure_threshold: int = 1
 
 
 @dataclass
 class JobConfig:
     name: str
-    schedule: str  # cron expression, e.g. "0 * * * *"
-    expected_interval_seconds: int = 3600
-    alert_after_failures: int = 1
+    schedule: str  # cron expression
     command: Optional[str] = None
+    max_duration: Optional[int] = None  # seconds
     alert: Optional[AlertConfig] = None
 
 
@@ -32,16 +36,19 @@ class CronwatchConfig:
     jobs: List[JobConfig] = field(default_factory=list)
     default_alert: Optional[AlertConfig] = None
     state_file: str = "/var/lib/cronwatch/state.json"
-    log_level: str = "INFO"
-    check_interval_seconds: int = 60
+    check_interval: int = 60  # seconds
 
 
 def _parse_alert(data: dict) -> AlertConfig:
     return AlertConfig(
-        email=data.get("email"),
-        webhook_url=data.get("webhook_url"),
-        on_failure=data.get("on_failure", True),
-        on_missed=data.get("on_missed", True),
+        email=data.get("email", []),
+        smtp_host=data.get("smtp_host"),
+        smtp_port=int(data.get("smtp_port", 25)),
+        smtp_from=data.get("smtp_from"),
+        smtp_user=data.get("smtp_user"),
+        smtp_password=data.get("smtp_password"),
+        smtp_tls=bool(data.get("smtp_tls", False)),
+        failure_threshold=int(data.get("failure_threshold", 1)),
     )
 
 
@@ -50,19 +57,17 @@ def _parse_job(data: dict) -> JobConfig:
     return JobConfig(
         name=data["name"],
         schedule=data["schedule"],
-        expected_interval_seconds=data.get("expected_interval_seconds", 3600),
-        alert_after_failures=data.get("alert_after_failures", 1),
         command=data.get("command"),
+        max_duration=data.get("max_duration"),
         alert=alert,
     )
 
 
 def load_config(path: str) -> CronwatchConfig:
-    config_path = Path(path)
-    if not config_path.exists():
+    if not os.path.exists(path):
         raise FileNotFoundError(f"Config file not found: {path}")
 
-    with config_path.open() as fh:
+    with open(path) as fh:
         raw = yaml.safe_load(fh) or {}
 
     default_alert = _parse_alert(raw["default_alert"]) if "default_alert" in raw else None
@@ -72,6 +77,5 @@ def load_config(path: str) -> CronwatchConfig:
         jobs=jobs,
         default_alert=default_alert,
         state_file=raw.get("state_file", "/var/lib/cronwatch/state.json"),
-        log_level=raw.get("log_level", "INFO"),
-        check_interval_seconds=raw.get("check_interval_seconds", 60),
+        check_interval=int(raw.get("check_interval", 60)),
     )
