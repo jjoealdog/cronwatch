@@ -64,6 +64,17 @@ def test_send_email_smtp_error_returns_false(alert_cfg):
     assert result is False
 
 
+def test_send_email_connects_to_configured_host_and_port(alert_cfg):
+    """Verify that send_email_alert passes the configured smtp_host and smtp_port to SMTP."""
+    mock_server = MagicMock()
+    with patch("smtplib.SMTP") as mock_smtp_cls:
+        mock_smtp_cls.return_value.__enter__ = lambda s: mock_server
+        mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
+        send_email_alert(alert_cfg, "backup", "failed")
+
+    mock_smtp_cls.assert_called_once_with("smtp.example.com", 587)
+
+
 def test_log_alert_does_not_raise(caplog):
     import logging
 
