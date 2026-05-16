@@ -1,0 +1,46 @@
+# cronwatch fingerprint example
+# Suppress duplicate alerts whose content has already been delivered
+# within the configured TTL window.
+
+alerts:
+  email:
+    recipients:
+      - ops@example.com
+    smtp_host: localhost
+    smtp_port: 25
+
+# Fingerprint settings are applied in the daemon / CLI layer.
+# fingerprint_state: /var/lib/cronwatch/fingerprints.json
+# fingerprint_ttl_seconds: 3600   # 1 hour — suppress identical alerts for this long
+
+jobs:
+  - name: nightly_backup
+    schedule: "0 2 * * *"
+    grace_seconds: 300
+    tags:
+      - backup
+      - critical
+
+  - name: hourly_sync
+    schedule: "0 * * * *"
+    grace_seconds: 120
+    tags:
+      - sync
+
+  - name: weekly_report
+    schedule: "0 9 * * 1"
+    grace_seconds: 600
+    tags:
+      - report
+
+# How fingerprinting works:
+#
+# 1. When an alert is about to fire, a SHA-256 fingerprint is computed from
+#    the (job_name, reason) pair.
+# 2. If that fingerprint was already seen within `fingerprint_ttl_seconds`,
+#    the alert is silently suppressed and the suppressed_count counter is
+#    incremented.
+# 3. Once the TTL expires the same alert will fire again, ensuring you are
+#    still notified about ongoing failures without being flooded.
+#
+# Combine with backoff or cooldown for layered noise reduction.
