@@ -38,8 +38,17 @@ class FingerprintedAlerter:
         return result
 
     def reset(self) -> None:
+        """Reset the delivered/suppressed counters (does not clear the fingerprint store)."""
         self.suppressed_count = 0
         self.delivered_count = 0
+
+    def stats(self) -> dict[str, int]:
+        """Return a snapshot of the current delivery and suppression counts."""
+        return {
+            "delivered": self.delivered_count,
+            "suppressed": self.suppressed_count,
+            "total": self.delivered_count + self.suppressed_count,
+        }
 
     def __call__(self, job_name: str, reason: str, **kwargs: Any) -> bool:
         return self.alert(job_name, reason, **kwargs)
