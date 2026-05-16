@@ -1,0 +1,40 @@
+# cronwatch config example — alert budget feature
+#
+# The alert budget limits how many alerts can fire per job within a rolling
+# time window. Once the budget is exhausted, further alerts are suppressed
+# until the window slides forward.
+
+alerts:
+  email:
+    recipients:
+      - ops@example.com
+    smtp_host: localhost
+    smtp_port: 25
+
+# Budget settings (applied globally to all jobs)
+budget:
+  # Rolling window length in seconds (default: 3600 = 1 hour)
+  window_seconds: 3600
+  # Maximum number of alerts allowed within the window per job
+  max_alerts: 5
+  # Path to persist budget state across restarts
+  state_file: /var/lib/cronwatch/budget_state.json
+
+jobs:
+  - name: nightly_backup
+    schedule: "0 2 * * *"
+    # Per-job override: only 2 alerts per hour for this noisy job
+    budget:
+      window_seconds: 3600
+      max_alerts: 2
+
+  - name: hourly_sync
+    schedule: "0 * * * *"
+    # Uses the global budget settings
+
+  - name: cleanup
+    schedule: "30 3 * * 0"
+    # Disable budget for critical job (set max_alerts very high)
+    budget:
+      window_seconds: 3600
+      max_alerts: 100
