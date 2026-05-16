@@ -45,11 +45,13 @@ cronwatch will send an alert if a job fails, exits with a non-zero code, or does
 
 ## Configuration Options
 
-| Key | Description |
-|---|---|
-| `schedule` | Standard cron expression for expected run time |
-| `alert_after` | Grace period before a missed run triggers an alert |
-| `notify` | List of alert channels (email, slack, webhook) |
+| Key | Description | Default |
+|---|---|---|
+| `schedule` | Standard cron expression for expected run time | *(required)* |
+| `alert_after` | Grace period before a missed run triggers an alert | `5m` |
+| `notify` | List of alert channels (email, slack, webhook) | *(required)* |
+| `timeout` | Kill the job and alert if it runs longer than this duration | *(none)* |
+| `retries` | Number of times to retry a failed job before alerting | `0` |
 
 ## License
 
