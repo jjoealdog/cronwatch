@@ -43,6 +43,12 @@ class RateLimitedAlerter:
         self._limiter.reset(job_name)
         self._suppressed.pop(job_name, None)
 
+    def reset_all(self) -> None:
+        """Reset rate limits and suppression counters for all tracked jobs."""
+        for job_name in list(self._suppressed):
+            self._limiter.reset(job_name)
+        self._suppressed.clear()
+
     def summary(self) -> dict:
         """Return a summary of suppressed alert counts."""
         return dict(self._suppressed)
