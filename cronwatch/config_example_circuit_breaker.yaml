@@ -1,0 +1,39 @@
+# cronwatch circuit breaker example configuration
+# Add circuit_breaker section under alert to protect notifier channels.
+
+alerts:
+  email:
+    recipients:
+      - ops@example.com
+    smtp_host: smtp.example.com
+    smtp_port: 587
+    use_tls: true
+    # Circuit breaker settings for the email channel.
+    # After `failure_threshold` consecutive delivery failures the circuit
+    # opens and alerts are suppressed until `recovery_timeout` seconds pass.
+    circuit_breaker:
+      failure_threshold: 3      # open after this many consecutive failures
+      recovery_timeout: 300     # seconds before attempting delivery again
+      state_file: /var/lib/cronwatch/cb_email.json
+
+  webhook:
+    urls:
+      - https://hooks.example.com/cronwatch
+    circuit_breaker:
+      failure_threshold: 5
+      recovery_timeout: 120
+      state_file: /var/lib/cronwatch/cb_webhook.json
+
+jobs:
+  - name: nightly_backup
+    schedule: "0 2 * * *"
+    max_failures: 1
+    alert:
+      # Reference a named alert channel defined above.
+      channel: email
+
+  - name: hourly_sync
+    schedule: "0 * * * *"
+    max_failures: 2
+    alert:
+      channel: webhook
