@@ -1,0 +1,39 @@
+# Example cronwatch configuration with alert grouping enabled.
+# Grouping batches multiple alerts within a time window into a single
+# notification, reducing noise when several jobs fail at once.
+
+alerts:
+  email:
+    recipients:
+      - ops@example.com
+    smtp_host: smtp.example.com
+    smtp_port: 587
+    use_tls: true
+    from_addr: cronwatch@example.com
+
+# Alert grouping settings (applied in cronwatch/grouping.py)
+grouping:
+  # Collect alerts for this many seconds before flushing as one message.
+  window_seconds: 120
+  # Flush immediately if this many alerts accumulate before the window ends.
+  max_size: 15
+
+jobs:
+  - name: daily_backup
+    schedule: "0 2 * * *"
+    grace_period: 300
+    tags:
+      - backup
+      - critical
+
+  - name: hourly_sync
+    schedule: "0 * * * *"
+    grace_period: 120
+    tags:
+      - sync
+
+  - name: weekly_report
+    schedule: "0 9 * * 1"
+    grace_period: 600
+    tags:
+      - report
