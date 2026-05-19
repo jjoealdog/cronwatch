@@ -1,0 +1,41 @@
+# cronwatch configuration — alert sampling example
+#
+# Alert sampling lets you forward only a fraction of alerts to reduce noise
+# during high-failure periods.  Set sampling_rate to a value between 0.0
+# (drop everything) and 1.0 (pass everything through, the default).
+#
+# Sampling is applied *after* deduplication and throttling so you still get
+# at least one alert per unique event before the sampler kicks in.
+
+alert:
+  email: ops@example.com
+  smtp_host: smtp.example.com
+  smtp_port: 587
+  smtp_tls: true
+  smtp_user: cronwatch@example.com
+  smtp_password: "s3cr3t"
+
+  # Extra keys consumed by sampling_integration:
+  sampling_rate: 0.25   # forward ~25 % of alerts
+
+jobs:
+  - name: hourly_report
+    schedule: "0 * * * *"
+    timeout: 300
+    tags:
+      - reporting
+
+  - name: nightly_backup
+    schedule: "0 2 * * *"
+    timeout: 3600
+    tags:
+      - backup
+      - critical
+
+  - name: health_ping
+    schedule: "*/5 * * * *"
+    timeout: 30
+    tags:
+      - monitoring
+    # Override sampling for this critical job — always alert.
+    # (wire a separate SampledAlerter with rate=1.0 for this job)
